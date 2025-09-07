@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <section id="rateCard" class="card">
-  <h2>Rate an Appetizer <span class="ribbon">🏈 Field Tested</span></h2>
+  <h2>Rate an Appetizer <span class="ribbon">🏈 LIVE</span></h2>
   <ul class="howto">
-    <li><span>😋</span><strong>Taste</strong> — 1: bland → 5: crave‑worthy</li>
-    <li><span>📸</span><strong>Presentation</strong> — 1: sloppy → 5: Instagram‑worthy</li>
-    <li><span>🏈</span><strong>Easy to Eat</strong> — 1: messy → 5: one‑hand, no fumbles</li>
+    <li><span>😋</span><strong>Taste</strong> - 1: bland to 5: crave worthy</li>
+    <li><span>📸</span><strong>Presentation</strong> - 1: sloppy to 5: Instagram worthy</li>
+    <li><span>🏈</span><strong>Easy to Eat</strong> - 1: messy to 5: one hand, no fumbles</li>
   </ul>
-  <p class="sub">Winner takes home the <strong>GOLDEN SPATULA 🥇🍳</strong>! Second & third = bragging rights only.</p>
+  <p class="sub">Winner takes home the <strong>GOLDEN SPATULA 🥇🍳</strong>. Second and third get bragging rights only.</p>
 
   <form id="rateForm" class="grid">
     <label>Participant</label>
@@ -34,6 +34,9 @@
       <div class="row"><span id="easyEmoji" class="emoji">🙂</span><span id="easyScore" class="score-pill">3 / 5</span></div>
     </div>
 
+    <label>(Optional) One word to describe it</label>
+    <input type="text" id="one_word" placeholder="e.g., Elite" inputmode="text" />
+
     <label>(Optional) Your Name</label>
     <input type="text" id="judge" placeholder="e.g., Bryan" />
 
@@ -43,13 +46,13 @@
   </form>
 
   <div id="thanks" class="hidden">
-    <p id="thanksMsg">Thanks for rating! ✅ You can update your score from this device at any time.</p>
+    <p id="thanksMsg">Thanks for rating. You can update your score from this device any time.</p>
     <div class="row"><button class="btn" id="rateAnother" type="button">Rate or Update Another</button></div>
   </div>
 </section>
 
 <section id="resultsCard" class="card">
-  <h2>Leaderboard <span class="ribbon">Live</span></h2>
+  <h2>Leaderboard <span class="ribbon">LIVE</span></h2>
   <div class="table-wrapper">
     <table class="table" id="resultsTable">
       <thead>
@@ -61,7 +64,19 @@
       <tbody></tbody>
     </table>
   </div>
-  <p class="sub">Only the top chef takes home the <strong>GOLDEN SPATULA</strong>. Everyone else gets bragging rights. 🏆</p>
+  <p class="sub">Only the top chef takes home the <strong>GOLDEN SPATULA</strong>. Everyone else gets bragging rights.</p>
+
+  <h3 style="margin-top:18px">One Word Results</h3>
+  <div class="table-wrapper">
+    <table class="table" id="wordsTable">
+      <thead>
+        <tr><th>Participant</th><th>Word</th><th>Count</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p class="sub"><a href="/words" style="color:#9bd4ff">Open the dedicated One Word page</a></p>
 </section>
 {% endblock %}
 
@@ -75,13 +90,8 @@
   const taste = document.getElementById('taste');
   const presentation = document.getElementById('presentation');
   const easy = document.getElementById('easy');
-  const tasteEmoji = document.getElementById('tasteEmoji');
-  const presEmoji  = document.getElementById('presEmoji');
-  const easyEmoji  = document.getElementById('easyEmoji');
-  const tasteScore = document.getElementById('tasteScore');
-  const presScore  = document.getElementById('presScore');
-  const easyScore  = document.getElementById('easyScore');
   const judge = document.getElementById('judge');
+  const oneWord = document.getElementById('one_word');
   const form = document.getElementById('rateForm');
   const thanks = document.getElementById('thanks');
   const thanksMsg = document.getElementById('thanksMsg');
@@ -89,8 +99,12 @@
 
   function syncEmoji(){
     const tv = +taste.value, pv = +presentation.value, ev = +easy.value;
-    tasteEmoji.textContent = tasteEmojis[tv]; presEmoji.textContent = presEmojis[pv]; easyEmoji.textContent = easyEmojis[ev];
-    tasteScore.textContent = `${tv} / 5`; presScore.textContent = `${pv} / 5`; easyScore.textContent = `${ev} / 5`;
+    document.getElementById('tasteEmoji').textContent = tasteEmojis[tv];
+    document.getElementById('presEmoji').textContent  = presEmojis[pv];
+    document.getElementById('easyEmoji').textContent  = easyEmojis[ev];
+    document.getElementById('tasteScore').textContent = `${tv} / 5`;
+    document.getElementById('presScore').textContent  = `${pv} / 5`;
+    document.getElementById('easyScore').textContent  = `${ev} / 5`;
   }
   ['input','change'].forEach(e => { taste.addEventListener(e, syncEmoji); presentation.addEventListener(e, syncEmoji); easy.addEventListener(e, syncEmoji); });
   syncEmoji();
@@ -105,16 +119,23 @@
         presentation.value = data.rating.presentation;
         easy.value = data.rating.easy;
         judge.value = data.rating.judge || '';
+        oneWord.value = data.rating.one_word || '';
         submitBtn.textContent = 'Update Rating';
-        thanksMsg.textContent = 'Updated! ✅ Your score has been saved.';
+        thanksMsg.textContent = 'Updated. Your score has been saved.';
       }else{
-        taste.value = 3; presentation.value = 3; easy.value = 3; judge.value = '';
+        taste.value = 3; presentation.value = 3; easy.value = 3; judge.value = ''; oneWord.value='';
         submitBtn.textContent = 'Submit Rating';
-        thanksMsg.textContent = 'Thanks for rating! ✅ You can update your score from this device at any time.';
+        thanksMsg.textContent = 'Thanks for rating. You can update your score from this device any time.';
       }
       syncEmoji();
     }catch{}
   });
+
+  function sanitizeOneWord(s){
+    if(!s) return null;
+    const t = s.trim().split(/\s+/)[0].slice(0,20);
+    return t || null;
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -124,6 +145,7 @@
       taste: +taste.value,
       presentation: +presentation.value,
       easy: +easy.value,
+      one_word: sanitizeOneWord(oneWord.value),
       judge: judge.value || null
     };
     try{
@@ -132,13 +154,13 @@
       if (!data.ok) throw new Error(data.error || 'Failed');
       form.classList.add('hidden');
       thanks.classList.remove('hidden');
-      refreshLeaderboard();
+      refreshAll();
     }catch(err){ alert('Error: ' + err.message); }
   });
 
   document.getElementById('rateAnother')?.addEventListener('click', ()=>{
     thanks.classList.add('hidden'); form.classList.remove('hidden'); form.reset(); entrant.selectedIndex = 0;
-    taste.value = 3; presentation.value = 3; easy.value = 3; judge.value=''; submitBtn.textContent='Submit Rating'; syncEmoji();
+    taste.value = 3; presentation.value = 3; easy.value = 3; judge.value=''; oneWord.value=''; submitBtn.textContent='Submit Rating'; syncEmoji();
   });
 
   async function refreshLeaderboard(){
@@ -160,7 +182,46 @@
         </tr>`).join('');
     }catch{ /* ignore */ }
   }
-  refreshLeaderboard();
-  setInterval(refreshLeaderboard, 10000);
+
+  async function refreshWords(){
+    try{
+      const res = await fetch('/api/words');
+      const data = await res.json();
+      const tbody = document.querySelector('#wordsTable tbody');
+      const rows = [];
+      Object.keys(data).forEach(name => {
+        (data[name] || []).forEach(item => {
+          rows.push({ name, word: item.word, count: item.count });
+        });
+      });
+      rows.sort((a,b)=> a.name.localeCompare(b.name) || b.count - a.count || a.word.localeCompare(b.word));
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td data-label="Participant">${r.name}</td>
+          <td data-label="Word">${r.word}</td>
+          <td data-label="Count">${r.count}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="3" style="color:#9db0d0">No one word entries yet.</td></tr>';
+    }catch{ /* ignore */ }
+  }
+
+  function refreshAll(){ refreshLeaderboard(); refreshWords(); }
+
+  // Adaptive refresh
+  let INTERVAL = 2000;
+  let intervalId;
+  function startAutoRefresh(){
+    clearInterval(intervalId);
+    intervalId = setInterval(refreshAll, INTERVAL);
+  }
+  document.addEventListener('visibilitychange', () => {
+    INTERVAL = document.hidden ? 10000 : 2000;
+    startAutoRefresh();
+  });
+  window.addEventListener('focus', refreshAll);
+  window.addEventListener('online', refreshAll);
+
+  refreshAll();
+  startAutoRefresh();
 </script>
 {% endblock %}

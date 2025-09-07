@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>One Word Results</h2>
+  <p class="sub">Each chip shows the words people picked. Bigger count means more people chose it.</p>
+  <div id="wordsContainer"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function loadWords(){
+    try{
+      const res = await fetch('/api/words');
+      const data = await res.json();
+      const container = document.getElementById('wordsContainer');
+      const names = Object.keys(data);
+      if(names.length === 0){
+        container.innerHTML = '<p class="sub">No one word entries yet.</p>';
+        return;
+      }
+      container.innerHTML = names.map(name => {
+        const chips = (data[name]||[]).map(x => `<span class="chip">${x.word}<b>${x.count}</b></span>`).join(' ');
+        return `<div class="word-card"><h3>${name}</h3><div class="chips">${chips || '<span class="sub">No words yet</span>'}</div></div>`;
+      }).join('');
+    }catch(e){
+      document.getElementById('wordsContainer').innerHTML = '<p class="sub">Could not load words.</p>';
+    }
+  }
+
+  // Adaptive refresh for words page
+  let INTERVAL = 2000;
+  let intervalId;
+  function startAutoRefresh(){
+    clearInterval(intervalId);
+    intervalId = setInterval(loadWords, INTERVAL);
+  }
+  document.addEventListener('visibilitychange', () => {
+    INTERVAL = document.hidden ? 10000 : 2000;
+    startAutoRefresh();
+  });
+  window.addEventListener('focus', loadWords);
+  window.addEventListener('online', loadWords);
+
+  loadWords();
+  startAutoRefresh();
+</script>
+{% endblock %}

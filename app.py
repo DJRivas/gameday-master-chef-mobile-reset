@@ -5,7 +5,8 @@ DATABASE = os.environ.get("DATABASE_URL", "ratings.db")
 SECRET_KEY = os.environ.get("SECRET_KEY", "set-a-secret-key")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "MASTERCHEF2025")
 
-ENTRANTS = ["Javier","Lindsay","Yesenia","Bryan","Viviana","Bernie","Rogelio","Daniella","Colleen","Justin","Paige","Nic","Martha"]
+# Participants (Steve added)
+ENTRANTS = ["Javier","Lindsay","Yesenia","Bryan","Viviana","Bernie","Rogelio","Daniella","Colleen","Justin","Paige","Nic","Martha","Steve"]
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = SECRET_KEY
@@ -16,6 +17,10 @@ def get_db():
         db = g._db = sqlite3.connect(DATABASE, check_same_thread=False)
         db.row_factory = sqlite3.Row
     return db
+
+def column_exists(db, table, col):
+    row = db.execute("PRAGMA table_info(%s)" % table).fetchall()
+    return any(r[1] == col for r in row)
 
 def init_db():
     db = get_db()
@@ -28,10 +33,16 @@ def init_db():
             easy INTEGER NOT NULL CHECK(easy BETWEEN 1 AND 5),
             judge TEXT,
             device_id TEXT,
+            one_word TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (entrant_index, device_id)
         )
     """)
+    try:
+        if not column_exists(db, "ratings", "one_word"):
+            db.execute("ALTER TABLE ratings ADD COLUMN one_word TEXT")
+    except Exception:
+        pass
     db.commit()
 
 @app.teardown_appcontext
@@ -53,6 +64,19 @@ def home():
         resp.set_cookie("device_id", str(uuid.uuid4()), max_age=60*60*24*365, samesite="Lax")
     return resp
 
+@app.route("/words")
+def words_page():
+    return render_template("words.html", entrants=ENTRANTS, title="One Word Results")
+
+def sanitize_one_word(s):
+    if not s:
+        return None
+    s = (s or "").strip()
+    if not s:
+        return None
+    first = s.split()[0][:20]
+    return first
+
 @app.route("/api/rate", methods=["POST"])
 def api_rate():
     data = request.get_json(silent=True) or {}
@@ -62,6 +86,7 @@ def api_rate():
         presentation = int(data.get("presentation"))
         easy = int(data.get("easy"))
         judge = (data.get("judge") or "").strip()[:50] or None
+        one_word = sanitize_one_word(data.get("one_word"))
     except Exception:
         return jsonify({"ok": False, "error": "Invalid payload"}), 400
 
@@ -69,21 +94,22 @@ def api_rate():
         return jsonify({"ok": False, "error": "Invalid entrant"}), 400
     for v in (taste, presentation, easy):
         if v < 1 or v > 5:
-            return jsonify({"ok": False, "error": "Scores must be 1–5"}), 400
+            return jsonify({"ok": False, "error": "Scores must be 1 to 5"}), 400
 
     device_id = device_id_from_request()
     db = get_db()
     db.execute(
         """
-        INSERT INTO ratings (entrant_index, taste, presentation, easy, judge, device_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO ratings (entrant_index, taste, presentation, easy, judge, device_id, one_word)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(entrant_index, device_id) DO UPDATE SET
             taste=excluded.taste,
             presentation=excluded.presentation,
             easy=excluded.easy,
-            judge=excluded.judge
+            judge=excluded.judge,
+            one_word=excluded.one_word
         """,
-        (entrant_index, taste, presentation, easy, judge, device_id),
+        (entrant_index, taste, presentation, easy, judge, device_id, one_word),
     )
     db.commit()
     return jsonify({"ok": True})
@@ -100,7 +126,7 @@ def api_my_rating():
     device_id = device_id_from_request()
     db = get_db()
     row = db.execute(
-        "SELECT taste, presentation, easy, judge FROM ratings WHERE entrant_index=? AND device_id=?",
+        "SELECT taste, presentation, easy, judge, one_word FROM ratings WHERE entrant_index=? AND device_id=?",
         (entrant_index, device_id),
     ).fetchone()
     return jsonify({"ok": True, "rating": dict(row) if row else None})
@@ -129,31 +155,44 @@ def api_leaderboard():
     } for r in rows]
     return jsonify(out)
 
+@app.route("/api/words")
+def api_words():
+    db = get_db()
+    rows = db.execute("""
+        SELECT entrant_index, LOWER(TRIM(one_word)) AS w, COUNT(*) AS c
+        FROM ratings
+        WHERE one_word IS NOT NULL AND TRIM(one_word) != ''
+        GROUP BY entrant_index, LOWER(TRIM(one_word))
+        ORDER BY entrant_index ASC, c DESC, w ASC
+    """).fetchall()
+    out = {}
+    for r in rows:
+        name = ENTRANTS[r["entrant_index"]]
+        out.setdefault(name, []).append({"word": r["w"], "count": r["c"]})
+    return jsonify(out)
+
 @app.route("/export.csv")
 def export_csv():
     db = get_db()
     rows = db.execute("""
-        SELECT id, entrant_index, taste, presentation, easy, judge, device_id, created_at
+        SELECT id, entrant_index, taste, presentation, easy, judge, device_id, one_word, created_at
         FROM ratings
         ORDER BY created_at ASC
     """).fetchall()
 
     def generate():
-        header = ["id","entrant_name","taste","presentation","easy","judge","device_id","created_at"]
-        yield ",".join(header) + "\n"
+        header = ["id","entrant_name","taste","presentation","easy","judge","device_id","one_word","created_at"]
+        yield ",".join(header) + "\\n"
         for r in rows:
             name = ENTRANTS[r["entrant_index"]]
+            def q(s): 
+                s = "" if s is None else str(s)
+                return '"' + s.replace('"','""') + '"'
             line = [
-                str(r["id"]),
-                '"' + name.replace('"','""') + '"',
-                str(r["taste"]),
-                str(r["presentation"]),
-                str(r["easy"]),
-                '"' + (r["judge"] or "").replace('"','""') + '"',
-                '"' + (r["device_id"] or "") + '"',
-                str(r["created_at"])
+                str(r["id"]), q(name), str(r["taste"]), str(r["presentation"]), str(r["easy"]),
+                q(r["judge"] or ""), q(r["device_id"] or ""), q(r["one_word"] or ""), str(r["created_at"])
             ]
-            yield ",".join(line) + "\n"
+            yield ",".join(line) + "\\n"
     return Response(generate(), mimetype="text/csv")
 
 @app.route("/admin", methods=["GET", "POST"])
@@ -169,7 +208,7 @@ def admin():
 
     db = get_db()
     rows = db.execute("""
-        SELECT r.id, r.entrant_index, r.taste, r.presentation, r.easy, r.judge, r.device_id, r.created_at
+        SELECT r.id, r.entrant_index, r.taste, r.presentation, r.easy, r.judge, r.device_id, r.one_word, r.created_at
         FROM ratings r
         ORDER BY r.entrant_index ASC, r.created_at ASC
     """).fetchall()
@@ -182,6 +221,7 @@ def admin():
         "total": r["taste"] + r["presentation"] + r["easy"],
         "judge": r["judge"] or "",
         "device_id": r["device_id"] or "",
+        "one_word": r["one_word"] or "",
         "created_at": r["created_at"],
     } for r in rows]
     lb = db.execute("""

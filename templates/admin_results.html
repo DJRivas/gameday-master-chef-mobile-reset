@@ -9,7 +9,7 @@
   {% endif %}
 
   <form action="{{ url_for('admin_reset') }}" method="post" onsubmit="return confirm('This will permanently delete ALL ratings. Continue?');" style="margin: 8px 0 16px;">
-    <button class="btn danger" type="submit">Reset DB (Clear All Ratings)</button>
+    <button class="btn danger" type="submit">Reset DB - Clear All Ratings</button>
   </form>
 
   <h3 style="margin-top:0">Leaderboard Snapshot</h3>
@@ -31,14 +31,14 @@
     <table class="table">
       <thead>
         <tr>
-          <th>ID</th><th>Participant</th><th>Taste</th><th>Presentation</th><th>Easy</th><th>Total</th><th>Judge</th><th>Device</th><th>Created</th>
+          <th>ID</th><th>Participant</th><th>Taste</th><th>Presentation</th><th>Easy</th><th>Total</th><th>One Word</th><th>Judge</th><th>Device</th><th>Created</th>
         </tr>
       </thead>
       <tbody>
         {% for r in detailed %}
         <tr>
           <td>{{ r.id }}</td><td>{{ r.entrant }}</td><td>{{ r.taste }}</td><td>{{ r.presentation }}</td><td>{{ r.easy }}</td>
-          <td><strong>{{ r.total }}</strong></td><td>{{ r.judge }}</td><td style="font-size:12px;opacity:.8">{{ r.device_id }}</td><td>{{ r.created_at }}</td>
+          <td><strong>{{ r.total }}</strong></td><td>{{ r.one_word }}</td><td>{{ r.judge }}</td><td style="font-size:12px;opacity:.8">{{ r.device_id }}</td><td>{{ r.created_at }}</td>
         </tr>
         {% endfor %}
       </tbody>
